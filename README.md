@@ -2,6 +2,8 @@
 
 OmarchyDrop is a native Omarchy top-bar project for AirDrop-compatible file sharing. Its architecture is designed for both directions, honest hardware detection, a supported USB-radio fallback, an unprivileged Rust daemon, and a minimal future radio service.
 
+![OmarchyDrop developer preview](preview.png)
+
 > Current status: **0.1.0 developer preview**, not an interoperable AirDrop release. The plugin, daemon, IPC, diagnostics, simulated radio, timing logic, BLE wake serialization, and receive-path safety utilities work and are tested. A physical AWDL backend and AirDrop wire engine are not connected yet, so real iPhone transfers are intentionally refused rather than misrepresented.
 
 OmarchyDrop is independent open-source software. It is not affiliated with or endorsed by Apple. AirDrop is a trademark of Apple Inc.
@@ -18,7 +20,7 @@ OmarchyDrop is independent open-source software. It is not affiliated with or en
 - Simulated AWDL backend, TSFT/monotonic timing, timestamp wraparound, and availability-window tests.
 - Bounded BLE wake payload model based on verified BlueZ D-Bus measurements.
 - Safe filename, size/count limit, URL-scheme, and collision-free destination utilities.
-- Hardened systemd user service and Arch `PKGBUILD` for the non-root backend.
+- Hardened per-user systemd service and Arch `PKGBUILD` for the unprivileged backend.
 
 ## Architecture
 
@@ -74,7 +76,7 @@ Do not create a separate Git worktree for cloud tasks; use the checkout already 
 
 ## Installation model
 
-The QML repository can eventually be installed with:
+Install the QML plugin with:
 
 ```bash
 omarchy plugin add https://github.com/akitwra/omadropshare.git --enable
@@ -88,7 +90,18 @@ makepkg -si
 systemctl --user enable --now omdropd.service
 ```
 
-The package currently installs only the unprivileged daemon and CLI. It does not install a root radio service, kernel patch, DKMS module, NetworkManager override, or passwordless sudo rule.
+The package installs only the unprivileged daemon, CLI, and per-user service unit. The unit runs as the logged-in user, sets `NoNewPrivileges=yes`, restricts its address families and kernel access, and does not receive Linux capabilities. No system radio service, kernel patch, DKMS module, NetworkManager override, or passwordless privilege-escalation policy is installed.
+
+### Removal
+
+Stop and disable the per-user backend before removing its package and plugin:
+
+```bash
+systemctl --user disable --now omdropd.service
+omarchy plugin remove io.github.akitwra.omarchy-drop
+```
+
+Then remove the `omarchy-drop-backend-git` package with your package manager. OmarchyDrop does not modify NetworkManager configuration or install kernel modules, so no system networking rollback is required.
 
 ## CLI
 

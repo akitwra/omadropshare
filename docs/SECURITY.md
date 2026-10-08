@@ -6,7 +6,7 @@ OmarchyDrop assumes every nearby peer, wireless frame, application message, file
 
 The Quickshell plugin is display/control code only. Its long-running child is `omdropctl events`; it does not parse protocol payloads or touch transferred files. `omdropd` is an unprivileged per-user daemon with a mode-0600 Unix socket. The future radio service is a separate privilege boundary with only adapter-scoped session operations and `CAP_NET_ADMIN`/`CAP_NET_RAW` where unavoidable.
 
-The privileged API must authenticate the calling UID and session owner, validate adapter identity and legal channels, reject concurrent owners, and never accept arbitrary shell commands, sysfs paths, or unrestricted raw frames. No passwordless sudo rule or setuid main daemon is acceptable.
+The privileged API must authenticate the calling UID and session owner, validate adapter identity and legal channels, reject concurrent owners, and never accept arbitrary shell commands, sysfs paths, or unrestricted raw frames. No passwordless privilege-escalation policy or setuid main daemon is acceptable.
 
 ## Nearby attacker
 
