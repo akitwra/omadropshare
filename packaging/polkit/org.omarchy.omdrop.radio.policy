@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>OmarchyDrop</vendor>
+  <vendor_url>https://github.com/akitwra/omadropshare</vendor_url>
+  <action id="org.omarchy.omdrop.radio">
+    <description>Start or stop the OmarchyDrop AWDL radio</description>
+    <message>Authentication is required to control the OmarchyDrop radio</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/omarchy-drop/omdrop-radio</annotate>
+  </action>
+</policyconfig>

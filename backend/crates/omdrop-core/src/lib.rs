@@ -259,6 +259,75 @@ impl AppModel {
         }
     }
 
+    pub fn select_adapter_by_interface(&mut self, interface: &str) {
+        self.snapshot.selected_adapter = self
+            .snapshot
+            .adapters
+            .iter()
+            .find(|adapter| adapter.interface.as_deref() == Some(interface))
+            .map(|adapter| adapter.id.clone());
+    }
+
+    pub fn begin_discovery(&mut self) -> Result<(), StateError> {
+        if !self.has_usable_adapter() {
+            return Err(StateError::HardwareUnsupported);
+        }
+        self.snapshot.state = AppState::Discovering;
+        self.snapshot.message = Some("Looking for nearby AirDrop receivers".to_owned());
+        Ok(())
+    }
+
+    pub fn finish_discovery(&mut self, peers: Vec<Peer>, error: Option<String>) {
+        self.snapshot.peers = peers;
+        self.snapshot.state = if self.snapshot.discoverability.is_some() {
+            AppState::Ready
+        } else {
+            AppState::Disabled
+        };
+        self.snapshot.message = error;
+    }
+
+    pub fn begin_send(&mut self, transfer: Transfer) -> Result<(), StateError> {
+        if !self.has_usable_adapter() {
+            return Err(StateError::HardwareUnsupported);
+        }
+        if self
+            .snapshot
+            .transfers
+            .iter()
+            .any(|existing| !existing.terminal())
+        {
+            return Err(StateError::TransferInProgress);
+        }
+        self.snapshot.transfers.push(transfer);
+        self.snapshot.state = AppState::Sending;
+        self.snapshot.message = None;
+        Ok(())
+    }
+
+    pub fn finish_send(&mut self, id: &str, bytes: u64, error: Option<String>) {
+        if let Some(transfer) = self
+            .snapshot
+            .transfers
+            .iter_mut()
+            .find(|transfer| transfer.id == id)
+        {
+            transfer.bytes_transferred = bytes.min(transfer.bytes_total.unwrap_or(bytes));
+            transfer.state = if error.is_some() {
+                TransferState::Failed
+            } else {
+                TransferState::Completed
+            };
+            transfer.error_code = error.as_ref().map(|_| "SEND_FAILED".to_owned());
+        }
+        self.snapshot.state = if self.snapshot.discoverability.is_some() {
+            AppState::Ready
+        } else {
+            AppState::Disabled
+        };
+        self.snapshot.message = error;
+    }
+
     pub fn enable_receiving(
         &mut self,
         now_millis: u64,
@@ -318,6 +387,8 @@ impl AppModel {
 pub enum StateError {
     #[error("no Wi-Fi adapter has passed an AWDL compatibility test")]
     HardwareUnsupported,
+    #[error("another transfer is already in progress")]
+    TransferInProgress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -402,5 +473,36 @@ mod tests {
         );
         model.enable_receiving(1_000, None).unwrap();
         assert!(!model.expire(u64::MAX));
+    }
+
+    #[test]
+    fn send_lifecycle_is_visible_and_terminal() {
+        let mut model = AppModel::new(
+            vec![adapter(CapabilityLevel::SupportedExperimental)],
+            BluetoothStatus::default(),
+        );
+        model
+            .begin_send(Transfer {
+                id: "transfer-1".into(),
+                direction: TransferDirection::Send,
+                peer_id: "peer-1".into(),
+                peer_name: Some("iPhone".into()),
+                files: vec![TransferFile {
+                    name: "photo.jpg".into(),
+                    bytes: 100,
+                }],
+                bytes_total: Some(100),
+                bytes_transferred: 0,
+                state: TransferState::WaitingForPeer,
+                started_at_millis: 1,
+                error_code: None,
+            })
+            .unwrap();
+        assert_eq!(model.snapshot().state, AppState::Sending);
+        model.finish_send("transfer-1", 100, None);
+        let snapshot = model.snapshot();
+        assert_eq!(snapshot.state, AppState::Disabled);
+        assert_eq!(snapshot.transfers[0].state, TransferState::Completed);
+        assert_eq!(snapshot.transfers[0].bytes_transferred, 100);
     }
 }

@@ -33,6 +33,7 @@ Panel {
   readonly property bool receiving: discoverability !== null && discoverability.accepting_new_transfers === true
   readonly property bool usable: applicationState !== "hardware_unsupported" && applicationState !== "backend_missing" && applicationState !== "radio_unavailable" && applicationState !== "error"
   readonly property bool transferring: applicationState === "sending" || applicationState === "receiving"
+  readonly property bool discovering: applicationState === "discovering"
   readonly property int remainingSeconds: {
     if (!discoverability || discoverability.expires_at_millis === null || discoverability.expires_at_millis === undefined) return -1
     return Math.max(0, Math.ceil((discoverability.expires_at_millis - nowMillis) / 1000))
@@ -41,6 +42,7 @@ Panel {
   readonly property string statusTitle: {
     if (!backendAvailable) return "Backend missing"
     if (applicationState === "hardware_unsupported") return "AirDrop unavailable"
+    if (applicationState === "discovering") return "Looking for devices"
     if (applicationState === "sending") return "Sending"
     if (applicationState === "receiving") return "Receiving"
     if (receiving) return "Ready to receive"
@@ -133,6 +135,12 @@ Panel {
     actionProc.running = true
   }
 
+  function discoverPeers() {
+    if (actionProc.running || !backendAvailable || !usable) return
+    actionProc.command = ["omdropctl", "discover", "--timeout", "15"]
+    actionProc.running = true
+  }
+
   Component.onCompleted: startEvents()
 
   WidgetButton {
@@ -188,6 +196,15 @@ Panel {
           onClicked: root.toggleReceiving()
         }
 
+        Button {
+          visible: root.backendAvailable && root.usable
+          text: root.discovering ? "Looking…" : "Find nearby devices"
+          bordered: true
+          foreground: root.foreground
+          enabled: !actionProc.running && !root.discovering
+          onClicked: root.discoverPeers()
+        }
+
         PanelSeparator { foreground: root.foreground }
 
         PanelSectionHeader {
@@ -199,7 +216,7 @@ Panel {
         Text {
           width: parent.width
           visible: root.peers.length === 0
-          text: root.usable ? "No nearby Apple devices yet." : "Device discovery needs a validated AWDL adapter."
+          text: root.usable ? "No nearby Apple devices yet. Open AirDrop on the Apple device, then press Find nearby devices." : "Device discovery needs a validated AWDL adapter."
           textFormat: Text.PlainText
           color: Qt.darker(root.foreground, 1.5)
           font.family: root.fontFamily

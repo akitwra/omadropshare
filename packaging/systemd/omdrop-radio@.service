@@ -1,0 +1,36 @@
+[Unit]
+Description=OmarchyDrop AWDL radio on %I
+Documentation=https://github.com/akitwra/omadropshare/blob/main/docs/ENGINE.md
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/omarchy-drop/omdrop-radio run %I
+ExecStopPost=/usr/lib/omarchy-drop/omdrop-radio restore %I
+Restart=no
+TimeoutStopSec=15
+RuntimeDirectory=omarchy-drop
+RuntimeDirectoryMode=0700
+
+# This is the only privileged process in OmarchyDrop. Its command line is
+# fixed by the unit and its helper validates %I as a Linux interface name.
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET
+SystemCallArchitectures=native
+ReadWritePaths=/run/omarchy-drop
+DevicePolicy=closed
+DeviceAllow=/dev/net/tun rw

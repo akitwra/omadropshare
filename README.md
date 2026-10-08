@@ -4,7 +4,7 @@ OmarchyDrop is a native Omarchy top-bar project for AirDrop-compatible file shar
 
 ![OmarchyDrop developer preview](preview.png)
 
-> Current status: **0.1.0 developer preview**, not an interoperable AirDrop release. The plugin, daemon, IPC, diagnostics, simulated radio, timing logic, BLE wake serialization, and receive-path safety utilities work and are tested. A physical AWDL backend and AirDrop wire engine are not connected yet, so real iPhone transfers are intentionally refused rather than misrepresented.
+> Current status: **post-0.1.0 developer preview**, not yet a validated interoperable release. A pinned real AWDL/AirDrop engine, guarded root radio service, adapter restoration, discovery, and multi-file send path are connected. The protected incoming-approval/streaming path and physical validation on each hardware family are still required before this can be called production-ready.
 
 OmarchyDrop is independent open-source software. It is not affiliated with or endorsed by Apple. AirDrop is a trademark of Apple Inc.
 
@@ -17,6 +17,9 @@ OmarchyDrop is independent open-source software. It is not affiliated with or en
 - Bounded Everyone-mode receive leases with automatic expiry.
 - Passive Linux Wi-Fi/Bluetooth enumeration and conservative driver classification.
 - `omdropctl status`, `events`, `peers`, `adapters`, `hardware probe`, `hardware test`, `diagnostics`, `receive`, and `recover` command surfaces.
+- Exact-commit GPLv3 `filin`/`luftlift` engine packaging with a non-disruptive adapter preflight and explicit provenance.
+- Real `_airdrop._tcp` discovery and multi-file `/Discover` → `/Ask` → `/Upload` sending over `awdl0`.
+- A narrow polkit/systemd radio boundary that journals and restores interface type, link state, and NetworkManager ownership.
 - Simulated AWDL backend, TSFT/monotonic timing, timestamp wraparound, and availability-window tests.
 - Bounded BLE wake payload model based on verified BlueZ D-Bus measurements.
 - Safe filename, size/count limit, URL-scheme, and collision-free destination utilities.
@@ -101,7 +104,7 @@ Remove the backend package and service first, then remove the QML plugin:
 omarchy plugin remove io.github.akitwra.omarchy-drop
 ```
 
-OmarchyDrop does not modify NetworkManager configuration or install kernel modules, so no system networking rollback is required.
+OmarchyDrop does not install kernel modules or persistent NetworkManager overrides. While a userspace AWDL session owns an adapter it temporarily releases that interface from NetworkManager and changes it to monitor mode. Stopping the radio service restores the journaled interface type, link state, and NetworkManager ownership; uninstall stops active radio units before removing the helper.
 
 ## CLI
 
@@ -114,14 +117,21 @@ omdropctl events --jsonl
 omdropctl peers --json
 omdropctl adapters
 omdropctl hardware probe
-omdropctl hardware test --adapter wlan1 --active
+omdropctl hardware test --adapter wlan1
+omdropctl radio start --adapter wlan1
+omdropctl discover --timeout 15
+omdropctl send --peer 'receiver._airdrop._tcp.local.' ~/Pictures/photo.jpg
+omdropctl radio status
+omdropctl radio stop --adapter wlan1
 omdropctl receive on --seconds 600
 omdropctl receive off
 omdropctl diagnostics --json
 omdropctl recover
 ```
 
-Discovery and send commands are present but return `RADIO_BACKEND_UNAVAILABLE` until a validated backend is integrated.
+`hardware test` runs a non-disruptive monitor-mode preflight; it deliberately does not claim that frame injection works. `radio start` temporarily takes ownership of the chosen adapter and can interrupt normal Wi-Fi on that same radio. Prefer a dedicated USB adapter. Always run `radio stop` after testing; systemd also runs restoration after a crash or failed start.
+
+Discovery and sending now use the real AirDrop protocol engine. Sending is restricted to exact IDs returned by discovery, regular files, 64 files per transfer, and 512 MiB total until the sender becomes fully streaming. Incoming receiving is still refused at the protocol boundary: the upstream standalone receiver auto-accepts and buffers uploads, which does not meet this project's approval and resource-safety requirements.
 
 ## Hardware policy
 

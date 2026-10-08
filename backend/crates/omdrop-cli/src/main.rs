@@ -47,6 +47,10 @@ enum Command {
         #[command(subcommand)]
         command: HardwareCommand,
     },
+    Radio {
+        #[command(subcommand)]
+        command: RadioCommand,
+    },
     Diagnostics(JsonFlag),
     Recover,
 }
@@ -75,6 +79,19 @@ enum HardwareCommand {
         #[arg(long)]
         active: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum RadioCommand {
+    Start {
+        #[arg(long)]
+        adapter: String,
+    },
+    Stop {
+        #[arg(long)]
+        adapter: String,
+    },
+    Status,
 }
 
 #[tokio::main]
@@ -148,6 +165,15 @@ async fn main() -> Result<()> {
                 )
                 .await?,
             ),
+        },
+        Command::Radio { command } => match command {
+            RadioCommand::Start { adapter } => {
+                print_json(&call(&socket, "radio_start", json!({"adapter": adapter})).await?)
+            }
+            RadioCommand::Stop { adapter } => {
+                print_json(&call(&socket, "radio_stop", json!({"adapter": adapter})).await?)
+            }
+            RadioCommand::Status => print_json(&call(&socket, "radio_status", Value::Null).await?),
         },
         Command::Diagnostics(flag) => {
             let value = call(&socket, "diagnostics", Value::Null).await?;

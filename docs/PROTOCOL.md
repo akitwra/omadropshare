@@ -33,7 +33,9 @@ Sending starts a bounded BLE wake advertisement only after explicit user intent,
 
 ## Still required for wire interoperability
 
-The mDNS/TLS/plist/HTTP/DVZIP engine and real AWDL frame state machine must be integrated from the selected pinned GPL backend and exercised with synthetic fixtures before physical testing. `/Discover`, `/Ask`, `/Upload`, chunk truncation, malformed plist, transfer IDs, multi-file archives, corrupted compressed blocks, cancellation, and authentication boundaries all require integration tests. No endpoint is exposed by `omdropd` yet, so the daemon correctly refuses discovery/send instead of pretending.
+The pinned GPL mDNS/TLS/plist/HTTP/DVZIP sender and real AWDL frame state machine are integrated. Their 370 protocol/radio unit tests run in addition to OmarchyDrop's boundary tests. `omdropd` exposes real discovery and multi-file send only while `awdl0` is healthy. Physical adapter/iPhone validation, streaming send progress, cancellation, and BLE wake still remain.
+
+The incoming endpoint is deliberately not exposed yet. The upstream receiver auto-accepts `/Ask`, buffers uploads, and does not enforce OmarchyDrop's destination/size policy. It will remain disabled until `/Ask` is bound to a local approval token and `/Upload` is streamed with byte, archive-member, decompression, path, collision, timeout, and disk-space limits.
 
 ## BLE wake provenance
 

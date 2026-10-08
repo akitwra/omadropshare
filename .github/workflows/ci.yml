@@ -21,6 +21,8 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Verify protocol engine lock pin
+        run: grep -F 'git+https://github.com/ayourtch-llm/opendrop-rs.git?rev=dccc798e244363eb92d35e3c52e9a913188dda91#dccc798e244363eb92d35e3c52e9a913188dda91' Cargo.lock
 
   plugin-manifest:
     runs-on: ubuntu-latest
@@ -51,3 +53,5 @@ jobs:
         run: |
           source packaging/PKGBUILD
           [[ ${source[0]} == *"#commit=$OMDROP_COMMIT" ]]
+          [[ ${source[1]} == *"#commit=dccc798e244363eb92d35e3c52e9a913188dda91" ]]
+          [[ ${source[1]} != *"#branch="* ]]

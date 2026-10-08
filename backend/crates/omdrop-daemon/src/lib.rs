@@ -1,8 +1,10 @@
 use anyhow::{Context, Result};
 use omdrop_core::{
-    AppModel, CapabilityLevel, HardwareAdapter, IpcError, IpcEvent, IpcRequest, IpcResponse,
-    RadioCapabilities, IPC_VERSION,
+    AppModel, CapabilityLevel, DeviceClass, HardwareAdapter, IpcError, IpcEvent, IpcRequest,
+    IpcResponse, Peer, RadioCapabilities, Transfer, TransferDirection, TransferFile, TransferState,
+    IPC_VERSION,
 };
+use omdrop_engine::Engine;
 use serde_json::{json, Value};
 use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
@@ -21,6 +23,7 @@ const MAX_REQUEST_BYTES: u64 = 64 * 1_024;
 pub struct DaemonState {
     model: Arc<RwLock<AppModel>>,
     events: broadcast::Sender<IpcEvent>,
+    engine: Engine,
 }
 
 impl DaemonState {
@@ -30,6 +33,7 @@ impl DaemonState {
         Self {
             model: Arc::new(RwLock::new(model)),
             events,
+            engine: Engine::detect(),
         }
     }
 
@@ -222,10 +226,89 @@ pub async fn process_request(state: &DaemonState, request: IpcRequest) -> IpcRes
             let snapshot = state.model.read().await.snapshot();
             success(id, serde_json::to_value(snapshot).unwrap_or(Value::Null))
         }
-        "hardware_test" => error_response(
+        "hardware_test" => {
+            let adapter = request.params.get("adapter").and_then(Value::as_str);
+            let Some(adapter) = adapter else {
+                return error_response(
+                    id,
+                    "ADAPTER_REQUIRED",
+                    "Choose an interface shown by `omdropctl adapters`",
+                );
+            };
+            match state.engine.preflight(adapter).await {
+                Ok(report) => success(
+                    id,
+                    json!({
+                        "preflight": report,
+                        "validated": false,
+                        "message": "Monitor mode is available. Injection still needs an on-air roundtrip, so the adapter was not silently marked compatible."
+                    }),
+                ),
+                Err(error) => error_response(id, "ADAPTER_PREFLIGHT_FAILED", &error.to_string()),
+            }
+        }
+        "radio_start" => {
+            let adapter = request.params.get("adapter").and_then(Value::as_str);
+            let Some(adapter) = adapter else {
+                return error_response(id, "ADAPTER_REQUIRED", "Choose a Wi-Fi interface");
+            };
+            if let Err(error) = state.engine.start_radio(adapter).await {
+                return error_response(id, "RADIO_START_FAILED", &error.to_string());
+            }
+            let mut ready = false;
+            for _ in 0..100 {
+                if Path::new("/sys/class/net/awdl0").exists() {
+                    ready = true;
+                    break;
+                }
+                time::sleep(Duration::from_millis(100)).await;
+            }
+            if !ready {
+                let _ = state.engine.stop_radio(adapter).await;
+                return error_response(
+                    id,
+                    "RADIO_START_FAILED",
+                    "The radio service started, but awdl0 did not appear within 10 seconds; the adapter was restored",
+                );
+            }
+            let adapters = omdrop_platform_linux::probe_wifi();
+            let bluetooth = omdrop_platform_linux::probe_bluetooth();
+            let mut model = state.model.write().await;
+            model.replace_hardware(adapters, bluetooth);
+            model.select_adapter_by_interface(adapter);
+            drop(model);
+            state.publish_state().await;
+            success(
+                id,
+                serde_json::to_value(state.engine.inventory()).unwrap_or(Value::Null),
+            )
+        }
+        "radio_stop" => {
+            let adapter = request.params.get("adapter").and_then(Value::as_str);
+            let Some(adapter) = adapter else {
+                return error_response(id, "ADAPTER_REQUIRED", "Choose a Wi-Fi interface");
+            };
+            match state.engine.stop_radio(adapter).await {
+                Ok(()) => {
+                    let adapters = omdrop_platform_linux::probe_wifi();
+                    let bluetooth = omdrop_platform_linux::probe_bluetooth();
+                    state
+                        .model
+                        .write()
+                        .await
+                        .replace_hardware(adapters, bluetooth);
+                    state.publish_state().await;
+                    success(
+                        id,
+                        serde_json::to_value(state.engine.inventory()).unwrap_or(Value::Null),
+                    )
+                }
+                Err(error) => error_response(id, "RADIO_STOP_FAILED", &error.to_string()),
+            }
+        }
+        "radio_status" => success(
             id,
-            "ACTIVE_TEST_UNAVAILABLE",
-            "The disruptive injection test is not implemented yet; no adapter status was upgraded",
+            serde_json::to_value(state.engine.inventory()).unwrap_or(Value::Null),
         ),
         "diagnostics" => {
             let snapshot = state.model.read().await.snapshot();
@@ -240,6 +323,7 @@ pub async fn process_request(state: &DaemonState, request: IpcRequest) -> IpcRes
                     "applicationVersion": env!("CARGO_PKG_VERSION"),
                     "ipcVersion": IPC_VERSION,
                     "kernel": kernel,
+                    "engine": state.engine.inventory(),
                     "status": snapshot
                 }),
             )
@@ -258,11 +342,121 @@ pub async fn process_request(state: &DaemonState, request: IpcRequest) -> IpcRes
                 serde_json::to_value(snapshot.peers).unwrap_or(Value::Null),
             )
         }
-        "discover" | "send" => error_response(
-            id,
-            "RADIO_BACKEND_UNAVAILABLE",
-            "A validated physical AWDL backend is required for this operation",
-        ),
+        "discover" => {
+            let timeout = request
+                .params
+                .get("timeout")
+                .and_then(Value::as_u64)
+                .unwrap_or(15)
+                .clamp(1, 60);
+            if let Err(error) = state.model.write().await.begin_discovery() {
+                return error_response(id, "HARDWARE_UNSUPPORTED", &error.to_string());
+            }
+            state.publish_state().await;
+            match state.engine.discover(Duration::from_secs(timeout)).await {
+                Ok(discovered) => {
+                    let now = now_millis();
+                    let peers = discovered
+                        .iter()
+                        .map(|peer| Peer {
+                            id: peer.id.clone(),
+                            display_name: Some(peer.display_name.clone()),
+                            device_class: classify_device(&peer.display_name),
+                            last_seen_millis: now,
+                        })
+                        .collect();
+                    state.model.write().await.finish_discovery(peers, None);
+                    state.publish_state().await;
+                    success(id, serde_json::to_value(discovered).unwrap_or(Value::Null))
+                }
+                Err(error) => {
+                    state
+                        .model
+                        .write()
+                        .await
+                        .finish_discovery(Vec::new(), Some(error.to_string()));
+                    state.publish_state().await;
+                    error_response(id, "DISCOVERY_FAILED", &error.to_string())
+                }
+            }
+        }
+        "send" => {
+            let Some(recipient) = request.params.get("peer").and_then(Value::as_str) else {
+                return error_response(id, "PEER_REQUIRED", "Choose a nearby AirDrop receiver");
+            };
+            let Some(files) = request.params.get("files").and_then(Value::as_array) else {
+                return error_response(id, "FILES_REQUIRED", "Choose at least one file");
+            };
+            let paths = files
+                .iter()
+                .filter_map(Value::as_str)
+                .map(std::path::PathBuf::from)
+                .collect::<Vec<_>>();
+            if paths.len() != files.len() || paths.is_empty() {
+                return error_response(id, "FILES_INVALID", "Every file must be a path string");
+            }
+            let transfer_id = format!("omdrop-{:016x}-{id:016x}", now_millis());
+            let transfer_files = match transfer_files(&paths) {
+                Ok(files) => files,
+                Err(error) => return error_response(id, "FILES_INVALID", &error.to_string()),
+            };
+            let Some(total) = transfer_files
+                .iter()
+                .try_fold(0_u64, |total, file| total.checked_add(file.bytes))
+            else {
+                return error_response(id, "FILES_INVALID", "Combined file size overflowed");
+            };
+            let peer_name = state
+                .model
+                .read()
+                .await
+                .snapshot()
+                .peers
+                .iter()
+                .find(|peer| peer.id == recipient)
+                .and_then(|peer| peer.display_name.clone());
+            let transfer = Transfer {
+                id: transfer_id.clone(),
+                direction: TransferDirection::Send,
+                peer_id: recipient.to_owned(),
+                peer_name,
+                files: transfer_files,
+                bytes_total: Some(total),
+                bytes_transferred: 0,
+                state: TransferState::WaitingForPeer,
+                started_at_millis: now_millis(),
+                error_code: None,
+            };
+            if let Err(error) = state.model.write().await.begin_send(transfer) {
+                return error_response(id, "SEND_NOT_READY", &error.to_string());
+            }
+            state.publish_state().await;
+            let sender_name = std::env::var("HOSTNAME").unwrap_or_else(|_| "OmarchyDrop".into());
+            match state
+                .engine
+                .send(recipient, &paths, &sender_name, &transfer_id)
+                .await
+            {
+                Ok(report) => {
+                    state
+                        .model
+                        .write()
+                        .await
+                        .finish_send(&transfer_id, report.bytes_sent, None);
+                    state.publish_state().await;
+                    success(id, serde_json::to_value(report).unwrap_or(Value::Null))
+                }
+                Err(error) => {
+                    state
+                        .model
+                        .write()
+                        .await
+                        .finish_send(&transfer_id, 0, Some(error.to_string()));
+                    state.publish_state().await;
+                    error_response(id, "SEND_FAILED", &error.to_string())
+                }
+            }
+        }
         _ => error_response(id, "UNKNOWN_METHOD", "Unknown IPC method"),
     }
 }
@@ -309,6 +503,48 @@ pub fn now_millis() -> u64 {
         .map_or(0, |duration| {
             u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
         })
+}
+
+fn classify_device(name: &str) -> DeviceClass {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("iphone") {
+        DeviceClass::Iphone
+    } else if lower.contains("ipad") {
+        DeviceClass::Ipad
+    } else if lower.contains("mac") {
+        DeviceClass::Mac
+    } else {
+        DeviceClass::Unknown
+    }
+}
+
+fn transfer_files(paths: &[std::path::PathBuf]) -> std::io::Result<Vec<TransferFile>> {
+    paths
+        .iter()
+        .map(|path| {
+            let metadata = std::fs::symlink_metadata(path)?;
+            if !metadata.file_type().is_file() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{} is not a regular file", path.display()),
+                ));
+            }
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "filename is not portable UTF-8",
+                    )
+                })?;
+            Ok(TransferFile {
+                name: name.to_owned(),
+                bytes: metadata.len(),
+            })
+        })
+        .collect()
 }
 
 fn mock_adapter() -> HardwareAdapter {

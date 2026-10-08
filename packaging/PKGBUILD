@@ -6,7 +6,7 @@ pkgdesc='Backend and diagnostics for the OmarchyDrop Quickshell plugin'
 arch=('x86_64' 'aarch64')
 url='https://github.com/akitwra/omadropshare'
 license=('GPL-3.0-only')
-depends=('gcc-libs')
+depends=('gcc-libs' 'iproute2' 'iw' 'polkit' 'systemd')
 makedepends=('cargo' 'git')
 provides=('omarchy-drop-backend')
 conflicts=('omarchy-drop-backend')
@@ -14,8 +14,12 @@ _source='git+https://github.com/akitwra/omadropshare.git'
 if [[ -n ${OMDROP_COMMIT:-} ]]; then
   _source+="#commit=$OMDROP_COMMIT"
 fi
-source=("omadropshare::$_source")
-b2sums=('SKIP')
+_engine_commit=dccc798e244363eb92d35e3c52e9a913188dda91
+source=(
+  "omadropshare::$_source"
+  "opendrop-rs::git+https://github.com/ayourtch-llm/opendrop-rs.git#commit=$_engine_commit"
+)
+b2sums=('SKIP' 'SKIP')
 
 pkgver() {
   cd omadropshare
@@ -25,15 +29,24 @@ pkgver() {
 prepare() {
   cd omadropshare/backend
   cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+
+  cd "$srcdir/opendrop-rs"
+  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
 }
 
 build() {
   cd omadropshare/backend
   CARGO_TARGET_DIR=target cargo build --frozen --release --workspace
+
+  cd "$srcdir/opendrop-rs"
+  CARGO_TARGET_DIR=target cargo build --frozen --release --workspace
 }
 
 check() {
   cd omadropshare/backend
+  CARGO_TARGET_DIR=target cargo test --frozen --workspace
+
+  cd "$srcdir/opendrop-rs"
   CARGO_TARGET_DIR=target cargo test --frozen --workspace
 }
 
@@ -41,10 +54,26 @@ package() {
   cd omadropshare
   install -Dm755 backend/target/release/omdropd "$pkgdir/usr/bin/omdropd"
   install -Dm755 backend/target/release/omdropctl "$pkgdir/usr/bin/omdropctl"
+  install -Dm755 backend/target/release/omdrop-radio \
+    "$pkgdir/usr/lib/omarchy-drop/omdrop-radio"
+  # Keep the protocol engines out of PATH. omdropd invokes them through a
+  # reviewed boundary; luftlift's standalone receiver auto-accepts transfers
+  # and must never become the product's receive path by accident.
+  install -Dm755 "$srcdir/opendrop-rs/target/release/filin" \
+    "$pkgdir/usr/lib/omarchy-drop/filin"
+  install -Dm755 "$srcdir/opendrop-rs/target/release/luftlift" \
+    "$pkgdir/usr/lib/omarchy-drop/luftlift"
   install -Dm644 packaging/systemd/omdropd.service "$pkgdir/usr/lib/systemd/user/omdropd.service"
+  install -Dm644 packaging/systemd/omdrop-radio@.service \
+    "$pkgdir/usr/lib/systemd/system/omdrop-radio@.service"
+  install -Dm644 packaging/polkit/org.omarchy.omdrop.radio.policy \
+    "$pkgdir/usr/share/polkit-1/actions/org.omarchy.omdrop.radio.policy"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$srcdir/opendrop-rs/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE.opendrop-rs"
   install -Dm644 docs/ARCHITECTURE.md "$pkgdir/usr/share/doc/$pkgname/ARCHITECTURE.md"
   install -Dm644 docs/HARDWARE.md "$pkgdir/usr/share/doc/$pkgname/HARDWARE.md"
   install -Dm644 docs/SECURITY.md "$pkgdir/usr/share/doc/$pkgname/SECURITY.md"
+  install -Dm644 docs/ENGINE.md "$pkgdir/usr/share/doc/$pkgname/ENGINE.md"
 }
 

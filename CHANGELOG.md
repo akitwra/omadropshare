@@ -10,6 +10,16 @@ All notable changes to OmarchyDrop are documented here.
 - Build the backend package from the exact installed plugin commit instead of an unpinned branch tip.
 - Start and verify the per-user daemon as part of backend installation.
 
+### Added
+
+- Package the real `filin` AWDL and `luftlift` AirDrop engines from an exact,
+  audited GPLv3 commit, outside `PATH` and behind the OmarchyDrop process
+  boundary.
+- Add a capability-bounded system radio service, narrow polkit helper, and
+  crash-safe restoration of interface and NetworkManager state.
+- Connect real AirDrop discovery and exact-peer multi-file sending over a
+  healthy `awdl0` link.
+
 ## [0.1.0] - 2026-10-08
 
 Initial developer preview.

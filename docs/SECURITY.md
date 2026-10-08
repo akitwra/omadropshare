@@ -32,3 +32,9 @@ No implemented command currently changes a physical radio. Before that capabilit
 
 Packet capture is not implemented. Any future capture command must be explicit, duration-bounded, off by default, stored privately, and warn that nearby-device metadata may be present. Captures are never telemetry; OmarchyDrop sends no analytics or transfer metadata to project servers.
 
+## Privileged radio boundary
+
+`omdropd` and the QML plugin remain unprivileged. `/usr/lib/omarchy-drop/omdrop-radio` is a root-owned, fixed-command helper invoked through polkit. It accepts only validated Linux interface names and the closed verbs `start`, `stop`, `run`, and `restore`; it never evaluates a shell command or caller-supplied path. The system unit bounds the radio process to `CAP_NET_ADMIN` and `CAP_NET_RAW` and `/dev/net/tun`.
+
+Before monitor mode, the helper records the adapter type, administrative link state, and NetworkManager ownership in a root-only runtime journal. `ExecStopPost` restores that state after normal stop, startup failure, or crash. No persistent NetworkManager setting or general privilege-escalation rule is installed.
+

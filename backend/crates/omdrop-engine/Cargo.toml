@@ -1,0 +1,19 @@
+[package]
+name = "omdrop-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+luftlift-rs = { git = "https://github.com/ayourtch-llm/opendrop-rs.git", rev = "dccc798e244363eb92d35e3c52e9a913188dda91" }
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

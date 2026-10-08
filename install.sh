@@ -41,6 +41,11 @@ for _attempt in {1..50}; do
   if omdropctl status >/dev/null 2>&1; then
     echo "OmarchyDrop backend is installed and running."
     omdropctl status
+    echo
+    echo "Next: inspect an adapter without changing it:"
+    echo "  omdropctl adapters"
+    echo "  omdropctl hardware test --adapter <interface>"
+    echo "Do not start the radio on your active Wi-Fi interface until you are ready for that connection to pause."
     exit 0
   fi
   sleep 0.1
