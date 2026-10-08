@@ -13,6 +13,9 @@ All notable changes to OmarchyDrop are documented here.
   native `ring` objects reliably.
 - Require administrator authentication for active-session radio control instead
   of granting the narrow polkit action automatically.
+- Reject the unimplemented disruptive hardware test explicitly instead of
+  silently substituting the monitor-mode preflight, and align security/hardware
+  documentation with the implemented radio boundary.
 
 ### Added
 

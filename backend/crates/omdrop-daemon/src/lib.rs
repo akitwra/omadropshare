@@ -227,6 +227,18 @@ pub async fn process_request(state: &DaemonState, request: IpcRequest) -> IpcRes
             success(id, serde_json::to_value(snapshot).unwrap_or(Value::Null))
         }
         "hardware_test" => {
+            if request
+                .params
+                .get("active")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
+                return error_response(
+                    id,
+                    "ACTIVE_TEST_UNAVAILABLE",
+                    "The disruptive injection test is not implemented yet; no adapter status was upgraded",
+                );
+            }
             let adapter = request.params.get("adapter").and_then(Value::as_str);
             let Some(adapter) = adapter else {
                 return error_response(
@@ -613,5 +625,20 @@ mod tests {
             .unwrap()
             .expires_at_millis
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn active_hardware_test_is_never_silently_downgraded() {
+        let state = DaemonState::new(AppModel::new(
+            vec![mock_adapter()],
+            BluetoothStatus::default(),
+        ));
+        let response = process_request(
+            &state,
+            request("hardware_test", json!({"adapter": "sim0", "active": true})),
+        )
+        .await;
+        assert!(!response.ok);
+        assert_eq!(response.error.unwrap().code, "ACTIVE_TEST_UNAVAILABLE");
     }
 }

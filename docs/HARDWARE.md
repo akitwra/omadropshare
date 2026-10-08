@@ -13,7 +13,13 @@ OmarchyDrop reports two different facts: what the kernel advertises and what has
 | Supported | Both directions, cleanup, and representative Apple devices were tested. |
 | Preferred | Supported and recommended because it preserves infrastructure Wi-Fi or has stronger operational evidence. |
 
-`omdropctl adapters` reports the current passive result. `omdropctl hardware test` intentionally refuses today because an incomplete active test would create false confidence. The future active test will require explicit confirmation, journal network state, inject both action and data probes, verify reception/acknowledgment, and restore the adapter on every exit path.
+`omdropctl adapters` reports the current passive result. `omdropctl hardware
+test --adapter <interface>` runs `filin --check`, a non-disruptive monitor-mode
+preflight, and still reports `validated: false`. The `--active` variant
+explicitly refuses today because an incomplete active test would create false
+confidence. The future active test will require explicit confirmation, journal
+network state, inject both action and data probes, verify
+reception/acknowledgment, and restore the adapter on every exit path.
 
 ## Project validation matrix
 

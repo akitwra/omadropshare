@@ -4,9 +4,13 @@ OmarchyDrop assumes every nearby peer, wireless frame, application message, file
 
 ## Trust boundaries
 
-The Quickshell plugin is display/control code only. Its long-running child is `omdropctl events`; it does not parse protocol payloads or touch transferred files. `omdropd` is an unprivileged per-user daemon with a mode-0600 Unix socket. The future radio service is a separate privilege boundary with only adapter-scoped session operations and `CAP_NET_ADMIN`/`CAP_NET_RAW` where unavoidable.
+The Quickshell plugin is display/control code only. Its long-running child is `omdropctl events`; it does not parse protocol payloads or touch transferred files. `omdropd` is an unprivileged per-user daemon with a mode-0600 Unix socket. The radio service is a separate privilege boundary with only adapter-scoped session operations and `CAP_NET_ADMIN`/`CAP_NET_RAW` where unavoidable.
 
-The privileged API must authenticate the calling UID and session owner, validate adapter identity and legal channels, reject concurrent owners, and never accept arbitrary shell commands, sysfs paths, or unrestricted raw frames. No passwordless privilege-escalation policy or setuid main daemon is acceptable.
+Polkit requires administrator authentication before the fixed radio helper is
+executed. The helper validates adapter identity, accepts no caller-supplied
+channel or path, and never evaluates shell commands or unrestricted raw frames.
+No passwordless privilege-escalation policy or setuid main daemon is
+acceptable.
 
 ## Nearby attacker
 
@@ -26,7 +30,12 @@ The IPC protocol is versioned, line-delimited JSON with a 64 KiB request ceiling
 
 ## Recovery and availability
 
-No implemented command currently changes a physical radio. Before that capability is added, exclusive sessions require a root-owned journal, transactional NetworkManager handoff, RAII cleanup, signal handling, systemd `ExecStopPost`, startup stale-session repair, and idempotent `omdropctl recover`. The project must never globally stop NetworkManager.
+Radio sessions keep a root-owned journal of interface type, link state, and
+NetworkManager ownership. The system unit runs restoration through
+`ExecStopPost` after normal stop, startup failure, or process exit. Explicit
+stale-session recovery through `omdropctl recover` is not wired yet and must
+not claim that it restored anything. The project never globally stops
+NetworkManager.
 
 ## Developer capture
 

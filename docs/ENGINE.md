@@ -16,8 +16,8 @@ validated process boundary invokes them.
 - The radio runtime requires `CAP_NET_ADMIN` and `CAP_NET_RAW`; only the
   root-owned system unit receives them. The long-lived user daemon receives
   neither. A fixed-argument helper journals and restores the adapter around
-  every session, and polkit permits only this root-owned helper for an active
-  local session.
+  every session, and polkit requires administrator authentication before it
+  executes this root-owned helper.
 - Standalone `luftlift receive` is deliberately not exposed. At the pinned
   revision it auto-accepts `/Ask`, buffers uploads in memory, and writes names
   without OmarchyDrop's collision/path/size policy. Real receiving remains
