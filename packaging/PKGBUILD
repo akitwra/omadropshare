@@ -10,6 +10,12 @@ depends=('gcc-libs' 'iproute2' 'iw' 'polkit' 'systemd')
 makedepends=('cargo' 'git')
 provides=('omarchy-drop-backend')
 conflicts=('omarchy-drop-backend')
+# Omarchy selects lld for Rust binaries while Arch's package-wide LTO flags
+# make C dependencies such as ring emit GCC LTO objects. lld cannot consume
+# those objects and reports the ring_core_* symbols as undefined. Cargo still
+# applies the release profile's Rust optimizations; only makepkg's cross-language
+# LTO injection is disabled here.
+options=('!lto')
 _source='git+https://github.com/akitwra/omadropshare.git'
 if [[ -n ${OMDROP_COMMIT:-} ]]; then
   _source+="#commit=$OMDROP_COMMIT"

@@ -93,7 +93,18 @@ That operation installs only the QML plugin. Install the native backend from the
 
 The installer uses the Arch package recipe in an isolated temporary directory, installs any declared build dependencies through `makepkg`, enables the per-user service, and verifies that `omdropctl` can reach it. It pins the package build to the commit already reviewed and cloned by `omarchy plugin add`; it does not build a later moving branch tip.
 
-The package installs only the unprivileged daemon, CLI, and per-user service unit. The unit runs as the logged-in user, sets `NoNewPrivileges=yes`, restricts its address families and kernel access, and does not receive Linux capabilities. No system radio service, kernel patch, DKMS module, NetworkManager override, or passwordless privilege-escalation policy is installed.
+The package intentionally disables makepkg's cross-language LTO injection.
+Omarchy links Rust binaries with `lld`, which cannot consume the GCC LTO
+objects emitted for native dependencies such as `ring`; Cargo's normal release
+optimizations remain enabled.
+
+The long-running daemon and CLI remain unprivileged. The user unit runs as the
+logged-in user, sets `NoNewPrivileges=yes`, restricts its address families and
+kernel access, and receives no Linux capabilities. Radio setup is isolated in a
+short-lived root helper launched through a template system unit and an
+authentication-required polkit action. No kernel patch, DKMS module, persistent
+NetworkManager override, or passwordless privilege-escalation policy is
+installed.
 
 ### Removal
 

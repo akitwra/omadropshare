@@ -9,6 +9,10 @@ All notable changes to OmarchyDrop are documented here.
 - Added root install and uninstall commands that work from an Omarchy-managed plugin checkout.
 - Build the backend package from the exact installed plugin commit instead of an unpinned branch tip.
 - Start and verify the per-user daemon as part of backend installation.
+- Disable makepkg's cross-language LTO injection so Omarchy's `lld` can link
+  native `ring` objects reliably.
+- Require administrator authentication for active-session radio control instead
+  of granting the narrow polkit action automatically.
 
 ### Added
 
