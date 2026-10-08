@@ -82,26 +82,26 @@ Install the QML plugin with:
 omarchy plugin add https://github.com/akitwra/omadropshare.git --enable
 ```
 
-That operation only installs plugin code and never silently modifies the system. Build/install the backend explicitly with the Arch package recipe:
+That operation installs only the QML plugin. Install the native backend from the checked-out, exact plugin commit with:
 
 ```bash
-cd packaging
-makepkg -si
-systemctl --user enable --now omdropd.service
+~/.config/omarchy/plugins/io.github.akitwra.omarchy-drop/install.sh
 ```
+
+The installer uses the Arch package recipe in an isolated temporary directory, installs any declared build dependencies through `makepkg`, enables the per-user service, and verifies that `omdropctl` can reach it. It pins the package build to the commit already reviewed and cloned by `omarchy plugin add`; it does not build a later moving branch tip.
 
 The package installs only the unprivileged daemon, CLI, and per-user service unit. The unit runs as the logged-in user, sets `NoNewPrivileges=yes`, restricts its address families and kernel access, and does not receive Linux capabilities. No system radio service, kernel patch, DKMS module, NetworkManager override, or passwordless privilege-escalation policy is installed.
 
 ### Removal
 
-Stop and disable the per-user backend before removing its package and plugin:
+Remove the backend package and service first, then remove the QML plugin:
 
 ```bash
-systemctl --user disable --now omdropd.service
+~/.config/omarchy/plugins/io.github.akitwra.omarchy-drop/uninstall.sh
 omarchy plugin remove io.github.akitwra.omarchy-drop
 ```
 
-Then remove the `omarchy-drop-backend-git` package with your package manager. OmarchyDrop does not modify NetworkManager configuration or install kernel modules, so no system networking rollback is required.
+OmarchyDrop does not modify NetworkManager configuration or install kernel modules, so no system networking rollback is required.
 
 ## CLI
 

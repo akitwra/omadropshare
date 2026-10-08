@@ -10,7 +10,11 @@ depends=('gcc-libs')
 makedepends=('cargo' 'git')
 provides=('omarchy-drop-backend')
 conflicts=('omarchy-drop-backend')
-source=('git+https://github.com/akitwra/omadropshare.git')
+_source='git+https://github.com/akitwra/omadropshare.git'
+if [[ -n ${OMDROP_COMMIT:-} ]]; then
+  _source+="#commit=$OMDROP_COMMIT"
+fi
+source=("omadropshare::$_source")
 b2sums=('SKIP')
 
 pkgver() {

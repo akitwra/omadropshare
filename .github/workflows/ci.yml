@@ -35,3 +35,19 @@ jobs:
             (.kinds | index("bar-widget") != null) and
             .entryPoints.barWidget == "Panel.qml"
           ' manifest.json
+
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate installer scripts
+        run: |
+          test -x install.sh
+          test -x uninstall.sh
+          bash -n install.sh uninstall.sh packaging/PKGBUILD
+      - name: Validate commit-pinned package source
+        env:
+          OMDROP_COMMIT: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: |
+          source packaging/PKGBUILD
+          [[ ${source[0]} == *"#commit=$OMDROP_COMMIT" ]]

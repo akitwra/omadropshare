@@ -2,6 +2,14 @@
 
 All notable changes to OmarchyDrop are documented here.
 
+## Unreleased
+
+### Fixed
+
+- Added root install and uninstall commands that work from an Omarchy-managed plugin checkout.
+- Build the backend package from the exact installed plugin commit instead of an unpinned branch tip.
+- Start and verify the per-user daemon as part of backend installation.
+
 ## [0.1.0] - 2026-10-08
 
 Initial developer preview.
