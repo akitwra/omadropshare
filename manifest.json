@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.akitwra.omarchy-drop",
+  "name": "OmarchyDrop",
+  "version": "0.1.0",
+  "author": "akitwra",
+  "license": "GPL-3.0-only",
+  "description": "AirDrop-compatible sharing for Omarchy with honest hardware diagnostics.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "OmarchyDrop",
+    "description": "Discover Apple devices, send and receive files, and inspect AWDL compatibility.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "discoverabilitySeconds": 600
+    },
+    "schema": [
+      {
+        "key": "discoverabilitySeconds",
+        "type": "integer",
+        "label": "Receive window (seconds)",
+        "min": 60,
+        "max": 7200,
+        "step": 60,
+        "defaultValue": 600
+      }
+    ]
+  }
+}

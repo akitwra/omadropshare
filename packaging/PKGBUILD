@@ -1,0 +1,46 @@
+# Maintainer: akitwra
+pkgname=omarchy-drop-backend-git
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='Backend and diagnostics for the OmarchyDrop Quickshell plugin'
+arch=('x86_64' 'aarch64')
+url='https://github.com/akitwra/omadropshare'
+license=('GPL-3.0-only')
+depends=('gcc-libs')
+makedepends=('cargo' 'git')
+provides=('omarchy-drop-backend')
+conflicts=('omarchy-drop-backend')
+source=('git+https://github.com/akitwra/omadropshare.git')
+b2sums=('SKIP')
+
+pkgver() {
+  cd omadropshare
+  git describe --long --tags --always | sed 's/^v//;s/-/.r/;s/-/./'
+}
+
+prepare() {
+  cd omadropshare/backend
+  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+  cd omadropshare/backend
+  CARGO_TARGET_DIR=target cargo build --frozen --release --workspace
+}
+
+check() {
+  cd omadropshare/backend
+  CARGO_TARGET_DIR=target cargo test --frozen --workspace
+}
+
+package() {
+  cd omadropshare
+  install -Dm755 backend/target/release/omdropd "$pkgdir/usr/bin/omdropd"
+  install -Dm755 backend/target/release/omdropctl "$pkgdir/usr/bin/omdropctl"
+  install -Dm644 packaging/systemd/omdropd.service "$pkgdir/usr/lib/systemd/user/omdropd.service"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 docs/ARCHITECTURE.md "$pkgdir/usr/share/doc/$pkgname/ARCHITECTURE.md"
+  install -Dm644 docs/HARDWARE.md "$pkgdir/usr/share/doc/$pkgname/HARDWARE.md"
+  install -Dm644 docs/SECURITY.md "$pkgdir/usr/share/doc/$pkgname/SECURITY.md"
+}
+
