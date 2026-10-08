@@ -105,6 +105,8 @@ OmarchyDrop does not modify NetworkManager configuration or install kernel modul
 
 ## CLI
 
+Run `omdropctl adapters` first. In the active hardware-test example, replace `wlan1` with an adapter name reported on your machine; do not assume that interface exists.
+
 ```bash
 omdropctl status
 omdropctl status --json
