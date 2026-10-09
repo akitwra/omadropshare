@@ -82,7 +82,7 @@ fn probe_phy(sys_root: &Path, phy_path: &Path, phy: String) -> HardwareAdapter {
         sys_root.join("class/net/awdl0").exists() && interfaces.iter().any(|name| name == "awdl0");
     let (level, mut reasons) = classify_driver(driver.as_deref(), native_awdl);
     reasons.push(
-        "Passive kernel metadata cannot prove action/data frame injection; run an explicit active test"
+        "Passive kernel metadata cannot prove action/data frame injection; the built-in active test is not available yet"
             .to_owned(),
     );
 

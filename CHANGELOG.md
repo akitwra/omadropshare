@@ -16,6 +16,8 @@ All notable changes to OmarchyDrop are documented here.
 - Reject the unimplemented disruptive hardware test explicitly instead of
   silently substituting the monitor-mode preflight, and align security/hardware
   documentation with the implemented radio boundary.
+- Stop directing users toward the unavailable active test and label the CLI
+  flag as reserved; the ordinary hardware test remains the safe preflight.
 
 ### Added
 

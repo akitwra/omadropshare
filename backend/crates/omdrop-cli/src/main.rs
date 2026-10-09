@@ -76,7 +76,10 @@ enum HardwareCommand {
     Test {
         #[arg(long)]
         adapter: Option<String>,
-        #[arg(long)]
+        #[arg(
+            long,
+            help = "Reserved for a future disruptive injection test; currently returns ACTIVE_TEST_UNAVAILABLE"
+        )]
         active: bool,
     },
 }
