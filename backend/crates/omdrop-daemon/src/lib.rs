@@ -304,11 +304,10 @@ pub async fn process_request(state: &DaemonState, request: IpcRequest) -> IpcRes
                 Ok(()) => {
                     let adapters = omdrop_platform_linux::probe_wifi();
                     let bluetooth = omdrop_platform_linux::probe_bluetooth();
-                    state
-                        .model
-                        .write()
-                        .await
-                        .replace_hardware(adapters, bluetooth);
+                    let mut model = state.model.write().await;
+                    model.replace_hardware(adapters, bluetooth);
+                    model.clear_selected_adapter();
+                    drop(model);
                     state.publish_state().await;
                     success(
                         id,

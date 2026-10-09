@@ -142,6 +142,13 @@ omdropctl recover
 
 `hardware test` runs a non-disruptive monitor-mode preflight; it deliberately does not claim that frame injection works. Do not add `--active`: the disruptive injection test is not implemented and returns `ACTIVE_TEST_UNAVAILABLE`. `radio start` temporarily takes ownership of the chosen adapter and can interrupt normal Wi-Fi on that same radio. Prefer a dedicated USB adapter. Always run `radio stop` after testing; systemd also runs restoration after a crash or failed start.
 
+When only unverified candidates are present, the panel offers an explicit
+experimental start action. A candidate USB adapter is preferred over an
+integrated adapter; trying an integrated candidate is labelled as disruptive
+because its infrastructure Wi-Fi connection will pause. This is best-effort,
+not a claim that software can add frame-injection support to incompatible
+hardware.
+
 Discovery and sending now use the real AirDrop protocol engine. Sending is restricted to exact IDs returned by discovery, regular files, 64 files per transfer, and 512 MiB total until the sender becomes fully streaming. Incoming receiving is still refused at the protocol boundary: the upstream standalone receiver auto-accepts and buffers uploads, which does not meet this project's approval and resource-safety requirements.
 
 ## Hardware policy

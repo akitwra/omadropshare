@@ -25,6 +25,7 @@ Panel {
   property var peers: []
   property var transfers: []
   property var adapters: []
+  property string selectedAdapterId: ""
   property var bluetooth: ({ available: false })
   property string message: "OmarchyDrop backend is not running."
   property string actionError: ""
@@ -34,6 +35,8 @@ Panel {
   readonly property bool usable: applicationState !== "hardware_unsupported" && applicationState !== "backend_missing" && applicationState !== "radio_unavailable" && applicationState !== "error"
   readonly property bool transferring: applicationState === "sending" || applicationState === "receiving"
   readonly property bool discovering: applicationState === "discovering"
+  readonly property var startupAdapter: chooseStartupAdapter()
+  readonly property var activeAdapter: adapterById(selectedAdapterId)
   readonly property int remainingSeconds: {
     if (!discoverability || discoverability.expires_at_millis === null || discoverability.expires_at_millis === undefined) return -1
     return Math.max(0, Math.ceil((discoverability.expires_at_millis - nowMillis) / 1000))
@@ -62,6 +65,25 @@ Panel {
     return (minutes < 10 ? "0" : "") + minutes + ":" + (rest < 10 ? "0" : "") + rest
   }
 
+  function adapterById(id) {
+    if (!id) return null
+    for (var index = 0; index < adapters.length; ++index) {
+      if (adapters[index].id === id) return adapters[index]
+    }
+    return null
+  }
+
+  function chooseStartupAdapter() {
+    var integrated = null
+    for (var index = 0; index < adapters.length; ++index) {
+      var adapter = adapters[index]
+      if (!adapter.interface || adapter.level !== "candidate") continue
+      if (adapter.built_in === false) return adapter
+      if (integrated === null) integrated = adapter
+    }
+    return integrated
+  }
+
   function applyEvent(value) {
     if (!value || value.event !== "state" || !value.data) return
     var data = value.data
@@ -71,6 +93,7 @@ Panel {
     peers = data.peers || []
     transfers = data.transfers || []
     adapters = data.adapters || []
+    selectedAdapterId = data.selected_adapter || ""
     bluetooth = data.bluetooth || ({ available: false })
     message = data.message || ""
   }
@@ -135,6 +158,18 @@ Panel {
     actionProc.running = true
   }
 
+  function startCandidateRadio() {
+    if (actionProc.running || !backendAvailable || !startupAdapter) return
+    actionProc.command = ["omdropctl", "radio", "start", "--adapter", startupAdapter.interface]
+    actionProc.running = true
+  }
+
+  function stopRadio() {
+    if (actionProc.running || !backendAvailable || !activeAdapter || !activeAdapter.interface) return
+    actionProc.command = ["omdropctl", "radio", "stop", "--adapter", activeAdapter.interface]
+    actionProc.running = true
+  }
+
   function discoverPeers() {
     if (actionProc.running || !backendAvailable || !usable) return
     actionProc.command = ["omdropctl", "discover", "--timeout", "15"]
@@ -185,6 +220,26 @@ Panel {
           foreground: root.foreground
           accent: root.usable ? Color.accent : root.urgent
           fontFamily: root.fontFamily
+        }
+
+        Button {
+          visible: root.backendAvailable && root.applicationState === "hardware_unsupported" && root.startupAdapter !== null
+          text: root.startupAdapter && root.startupAdapter.built_in === false
+            ? "Try USB radio " + root.startupAdapter.interface
+            : "Try " + (root.startupAdapter ? root.startupAdapter.interface : "adapter") + " (Wi-Fi pauses)"
+          bordered: true
+          foreground: root.foreground
+          enabled: !actionProc.running
+          onClicked: root.startCandidateRadio()
+        }
+
+        Button {
+          visible: root.backendAvailable && root.activeAdapter !== null
+          text: "Stop AirDrop radio"
+          bordered: true
+          foreground: root.foreground
+          enabled: !actionProc.running
+          onClicked: root.stopRadio()
         }
 
         Button {

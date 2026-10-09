@@ -18,6 +18,9 @@ All notable changes to OmarchyDrop are documented here.
   documentation with the implemented radio boundary.
 - Stop directing users toward the unavailable active test and label the CLI
   flag as reserved; the ordinary hardware test remains the safe preflight.
+- Let users explicitly try a candidate adapter from the panel, prefer external
+  USB candidates over integrated radios, and expose radio stop/restoration in
+  the UI.
 
 ### Added
 

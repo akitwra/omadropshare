@@ -210,10 +210,7 @@ impl AppModel {
         } else {
             AppState::HardwareUnsupported
         };
-        let message = (!usable).then(|| {
-            "No adapter has passed an AWDL compatibility test; connect a validated USB adapter"
-                .to_owned()
-        });
+        let message = (!usable).then(|| hardware_guidance(&adapters));
         Self {
             snapshot: StatusSnapshot {
                 version: IPC_VERSION,
@@ -251,10 +248,7 @@ impl AppModel {
                 self.snapshot.message = None;
             } else {
                 self.snapshot.state = AppState::HardwareUnsupported;
-                self.snapshot.message = Some(
-                    "No adapter has passed an AWDL compatibility test; connect a validated USB adapter"
-                        .to_owned(),
-                );
+                self.snapshot.message = Some(hardware_guidance(&self.snapshot.adapters));
             }
         }
     }
@@ -266,6 +260,10 @@ impl AppModel {
             .iter()
             .find(|adapter| adapter.interface.as_deref() == Some(interface))
             .map(|adapter| adapter.id.clone());
+    }
+
+    pub fn clear_selected_adapter(&mut self) {
+        self.snapshot.selected_adapter = None;
     }
 
     pub fn begin_discovery(&mut self) -> Result<(), StateError> {
@@ -383,6 +381,34 @@ impl AppModel {
     }
 }
 
+fn hardware_guidance(adapters: &[HardwareAdapter]) -> String {
+    if adapters.is_empty() {
+        return "No Wi-Fi adapter was detected; connect a validated USB adapter and re-scan"
+            .to_owned();
+    }
+    if let Some(adapter) = adapters.iter().find(|adapter| {
+        !adapter.built_in
+            && adapter.level == CapabilityLevel::Candidate
+            && adapter.interface.is_some()
+    }) {
+        return format!(
+            "USB adapter {} is an unverified candidate; run the safe preflight, then try the radio",
+            adapter.interface.as_deref().unwrap_or(&adapter.id)
+        );
+    }
+    if let Some(adapter) = adapters.iter().find(|adapter| {
+        adapter.built_in
+            && adapter.level == CapabilityLevel::Candidate
+            && adapter.interface.is_some()
+    }) {
+        return format!(
+            "Built-in adapter {} is unverified; an experimental radio start will pause its Wi-Fi connection",
+            adapter.interface.as_deref().unwrap_or(&adapter.id)
+        );
+    }
+    "No adapter can provide a verified AWDL path; connect a validated USB adapter".to_owned()
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum StateError {
     #[error("no Wi-Fi adapter has passed an AWDL compatibility test")]
@@ -451,6 +477,36 @@ mod tests {
             BluetoothStatus::default(),
         );
         assert_eq!(model.snapshot().state, AppState::HardwareUnsupported);
+    }
+
+    #[test]
+    fn usb_candidate_is_recommended_before_an_integrated_candidate() {
+        let mut integrated = adapter(CapabilityLevel::Candidate);
+        integrated.id = "integrated".to_owned();
+        integrated.interface = Some("wlan0".to_owned());
+        integrated.built_in = true;
+        let mut usb = adapter(CapabilityLevel::Candidate);
+        usb.id = "usb".to_owned();
+        usb.interface = Some("wlan1".to_owned());
+        usb.built_in = false;
+        let model = AppModel::new(vec![integrated, usb], BluetoothStatus::default());
+        assert!(model
+            .snapshot()
+            .message
+            .unwrap()
+            .starts_with("USB adapter wlan1"));
+    }
+
+    #[test]
+    fn clearing_selected_adapter_ends_the_radio_session_marker() {
+        let mut model = AppModel::new(
+            vec![adapter(CapabilityLevel::SupportedExperimental)],
+            BluetoothStatus::default(),
+        );
+        model.select_adapter_by_interface("wlan0");
+        assert_eq!(model.snapshot().selected_adapter.as_deref(), Some("phy0"));
+        model.clear_selected_adapter();
+        assert!(model.snapshot().selected_adapter.is_none());
     }
 
     #[test]
